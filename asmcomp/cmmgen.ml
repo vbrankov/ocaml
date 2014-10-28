@@ -1381,7 +1381,11 @@ let rec transl = function
       | (Pmakeblock(tag, mut), args) ->
           make_alloc tag (List.map transl args)
       | (Pccall prim, args) ->
-          if prim.prim_native_float then
+          if prim.prim_name = "caml_float_compare" then
+            (* Avoid boxing in float comparison to reduce garbage *)
+            (Cop(Cextcall("caml_float_compare_float", typ_addr, false, dbg),
+                 List.map transl_unbox_float args))
+          else if prim.prim_native_float then
             box_float
               (Cop(Cextcall(prim.prim_native_name, typ_float, false, dbg),
                    List.map transl_unbox_float args))
