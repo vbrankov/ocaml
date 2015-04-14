@@ -323,6 +323,17 @@ let rec bound_value_identifiers = function
   | Sig_class(id, decl, _) :: rem -> id :: bound_value_identifiers rem
   | _ :: rem -> bound_value_identifiers rem
 
+
+(* Code to translate class entries in a structure *)
+
+let transl_class_bindings cl_list =
+  let ids = List.map (fun (ci, _) -> ci.ci_id_class) cl_list in
+  (ids,
+   List.map
+     (fun ({ci_id_class=id; ci_expr=cl; ci_virt=vf}, meths) ->
+       (id, transl_class ids id meths cl vf))
+     cl_list)
+
 (* Compile a module expression *)
 
 let rec transl_module cc rootpath mexp =
@@ -407,7 +418,7 @@ and transl_structure fields cc rootpath = function
   | Tstr_primitive descr ->
       record_primitive descr.val_val;
       transl_structure fields cc rootpath rem
-  | Tstr_type(decls) ->
+  | Tstr_type(_, decls) ->
       transl_structure fields cc rootpath rem
   | Tstr_typext(tyext) ->
       let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors in
@@ -433,13 +444,8 @@ and transl_structure fields cc rootpath = function
         bindings
         (transl_structure ext_fields cc rootpath rem)
   | Tstr_class cl_list ->
-      let ids = List.map (fun (ci,_,_) -> ci.ci_id_class) cl_list in
-      Lletrec(List.map
-              (fun (ci, meths, vf) ->
-                let id = ci.ci_id_class in
-                let cl = ci.ci_expr in
-                  (id, transl_class ids id meths cl vf ))
-                cl_list,
+      let (ids, class_bindings) = transl_class_bindings cl_list in
+      Lletrec(class_bindings,
               transl_structure (List.rev_append ids fields) cc rootpath rem)
   | Tstr_include incl ->
       let ids = bound_value_identifiers incl.incl_type in
@@ -492,7 +498,7 @@ let rec defined_idents = function
     | Tstr_value(rec_flag, pat_expr_list) ->
       let_bound_idents pat_expr_list @ defined_idents rem
     | Tstr_primitive desc -> defined_idents rem
-    | Tstr_type decls -> defined_idents rem
+    | Tstr_type (_, decls) -> defined_idents rem
     | Tstr_typext tyext ->
       List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
       @ defined_idents rem
@@ -503,7 +509,7 @@ let rec defined_idents = function
     | Tstr_modtype _ -> defined_idents rem
     | Tstr_open _ -> defined_idents rem
     | Tstr_class cl_list ->
-      List.map (fun (ci, _, _) -> ci.ci_id_class) cl_list @ defined_idents rem
+      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ defined_idents rem
     | Tstr_class_type cl_list -> defined_idents rem
     | Tstr_include incl ->
       bound_value_identifiers incl.incl_type @ defined_idents rem
@@ -518,7 +524,7 @@ let rec more_idents = function
     | Tstr_eval (expr, _attrs) -> more_idents rem
     | Tstr_value(rec_flag, pat_expr_list) -> more_idents rem
     | Tstr_primitive _ -> more_idents rem
-    | Tstr_type decls -> more_idents rem
+    | Tstr_type (_, decls) -> more_idents rem
     | Tstr_typext tyext -> more_idents rem
     | Tstr_exception _ -> more_idents rem
     | Tstr_recmodule decls -> more_idents rem
@@ -540,7 +546,7 @@ and all_idents = function
     | Tstr_value(rec_flag, pat_expr_list) ->
       let_bound_idents pat_expr_list @ all_idents rem
     | Tstr_primitive _ -> all_idents rem
-    | Tstr_type decls -> all_idents rem
+    | Tstr_type (_, decls) -> all_idents rem
     | Tstr_typext tyext ->
       List.map (fun ext -> ext.ext_id) tyext.tyext_constructors
       @ all_idents rem
@@ -550,7 +556,7 @@ and all_idents = function
     | Tstr_modtype _ -> all_idents rem
     | Tstr_open _ -> all_idents rem
     | Tstr_class cl_list ->
-      List.map (fun (ci, _, _) -> ci.ci_id_class) cl_list @ all_idents rem
+      List.map (fun (ci, _) -> ci.ci_id_class) cl_list @ all_idents rem
     | Tstr_class_type cl_list -> all_idents rem
     | Tstr_include incl ->
       bound_value_identifiers incl.incl_type @ all_idents rem
@@ -598,7 +604,7 @@ let transl_store_structure glob map prims str =
   | Tstr_primitive descr ->
       record_primitive descr.val_val;
       transl_store rootpath subst rem
-  | Tstr_type(decls) ->
+  | Tstr_type(_, decls) ->
       transl_store rootpath subst rem
   | Tstr_typext(tyext) ->
       let ids = List.map (fun ext -> ext.ext_id) tyext.tyext_constructors in
@@ -648,15 +654,8 @@ let transl_store_structure glob map prims str =
         (Lsequence(store_idents ids,
                    transl_store rootpath (add_idents true ids subst) rem))
   | Tstr_class cl_list ->
-      let ids = List.map (fun (ci, _, _) -> ci.ci_id_class) cl_list in
-      let lam =
-        Lletrec(List.map
-              (fun (ci, meths, vf) ->
-                let id = ci.ci_id_class in
-                let cl = ci.ci_expr in
-                     (id, transl_class ids id meths cl vf))
-                  cl_list,
-                store_idents ids) in
+      let (ids, class_bindings) = transl_class_bindings cl_list in
+      let lam = Lletrec(class_bindings, store_idents ids) in
       Lsequence(subst_lambda subst lam,
                 transl_store rootpath (add_idents false ids subst) rem)
   | Tstr_include incl ->
@@ -849,17 +848,9 @@ let transl_toplevel_item item =
   | Tstr_class cl_list ->
       (* we need to use unique names for the classes because there might
          be a value named identically *)
-      let ids = List.map (fun (ci, _, _) -> ci.ci_id_class) cl_list in
+      let (ids, class_bindings) = transl_class_bindings cl_list in
       List.iter set_toplevel_unique_name ids;
-      Lletrec(List.map
-          (fun (ci, meths, vf) ->
-            let id = ci.ci_id_class in
-            let cl = ci.ci_expr in
-                   (id, transl_class ids id meths cl vf))
-                cl_list,
-              make_sequence
-                (fun (ci, _, _) -> toploop_setvalue_id ci.ci_id_class)
-                cl_list)
+      Lletrec(class_bindings, make_sequence toploop_setvalue_id ids)
   | Tstr_include incl ->
       let ids = bound_value_identifiers incl.incl_type in
       let modl = incl.incl_mod in

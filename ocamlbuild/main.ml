@@ -92,6 +92,7 @@ let proceed () =
      <**/*.cmi>: ocaml, byte, native\n\
      <**/*.cmx>: ocaml, native\n\
      <**/*.mly>: infer\n\
+     <**/.svn>|\".bzr\"|\".hg\"|\".git\"|\"_darcs\": -traverse\n\
     ";
 
   List.iter
@@ -264,10 +265,10 @@ let proceed () =
     else
       ()
   with
-  | Ocaml_dependencies.Circular_dependencies(seen, p) ->
+  | Ocaml_dependencies.Circular_dependencies(cycle, p) ->
       raise
         (Exit_build_error
-          (sbprintf "@[<2>Circular dependencies: %S already seen in@ %a@]@." p pp_l seen))
+          (sbprintf "@[<2>Circular dependencies: %S already seen in@ %a@]@." p pp_l cycle))
 ;;
 
 open Exit_codes;;
