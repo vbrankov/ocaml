@@ -25,10 +25,6 @@ type arg_kind =
   | `Int
   | `Int32
   | `Int64
-  | `M128d (* 128-bit packed floats *)
-  | `M256d (* 256-bit packed floats *)
-  | `M128i (* 128-bit packed integers *)
-  | `M256i (* 256-bit packed integers *)
   | `Nativeint
   | `Unit ]
 
@@ -85,7 +81,6 @@ type arg_modifier =
   | R32 (* 32-bit name (EAX, EBX) *)
   | R64 (* 64-bit name (RAX, RBX) *)
   | XMM (* SSE *)
-  | YMM (* AVX *)
 
 (** Parsed assembly template item *)
 type template_item =

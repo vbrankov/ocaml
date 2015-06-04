@@ -31,10 +31,6 @@ let oper_result_type = function
       begin match c with
         Word -> typ_addr
       | Single | Double | Double_u -> typ_float
-      | M128d_a | M128d_u -> typ_m128d
-      | M256d_a | M256d_u -> typ_m256d
-      | M128i_a | M128i_u -> typ_m128i
-      | M256i_a | M256i_u -> typ_m256i
       | _ -> typ_int
       end
   | Calloc -> typ_addr
@@ -54,10 +50,6 @@ let oper_result_type = function
         `Addr  -> typ_addr
       | `Float -> typ_float
       | `Int | `Int32 | `Int64 | `Nativeint -> typ_int
-      | `M128d -> typ_m128d
-      | `M256d -> typ_m256d
-      | `M128i -> typ_m128i
-      | `M256i -> typ_m256i
       | `Unit  -> typ_void
 
 (* Infer the size in bytes of the result of a simple expression *)
@@ -292,12 +284,7 @@ method asm_alternative_cost asm args alt_index =
           | (`m8 | `m16 | `m32),
             Cop(Cload (Thirtytwo_unsigned | Thirtytwo_signed as chunk), [loc])
           | (`m8 | `m16 | `m32 | `m64),
-            Cop(Cload (Word | Single | Double | Double_u
-                      | M128d_u | M256d_u | M128i_u | M256i_u as chunk), [loc])
-          | (`m8 | `m16 | `m32 | `m64 | `m128),
-            Cop(Cload (M128d_a | M128i_a as chunk), [loc])
-          | (`m8 | `m16 | `m32 | `m64 | `m128 | `m256),
-            Cop(Cload (M256d_a | M256i_a as chunk), [loc])
+            Cop(Cload (Word | Single | Double | Double_u as chunk), [loc])
             when asm_arg.input && alt.copy_to_output = None ->
               let addr, arg1 = self#select_addressing chunk loc in
               Addr (chunk, addr, arg1),
@@ -895,10 +882,6 @@ method emit_stores env data regs_addr =
                 let kind =
                   match r.typ with
                   | Float -> Double_u
-                  | M128d -> M128d_u
-                  | M256d -> M256d_u
-                  | M128i -> M128i_u
-                  | M256i -> M256i_u
                   | _ -> Word
                 in
                 self#insert (Iop(Istore(kind, !a, false)))

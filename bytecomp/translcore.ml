@@ -416,8 +416,6 @@ let transl_primitive loc p env ty =
     try specialize_primitive loc p env ty ~has_constant_constructor:false
     with Not_found -> Pccall p
   in
-  let rec make_params n =
-    if n <= 0 then [] else Ident.create "prim" :: make_params (n-1) in
   match prim with
   | Plazyforce ->
       let parm = Ident.create "prim" in
@@ -434,6 +432,8 @@ let transl_primitive loc p env ty =
       | _ -> assert false
     end
   | _ ->
+      let rec make_params n =
+        if n <= 0 then [] else Ident.create "prim" :: make_params (n-1) in
       let params = make_params p.prim_arity in
       Lfunction{ kind = Curried; params;
                  body = Lprim(prim, List.map (fun id -> Lvar id) params) }

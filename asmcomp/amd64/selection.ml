@@ -201,7 +201,7 @@ method! asm_pseudoreg alt r =
   in
   match alt_reg with
   | Inline_asm_arch.R   when List.mem r.Reg.typ [ Addr; Int ] -> r
-  | Inline_asm_arch.SSE when List.mem r.Reg.typ [ Float; M128d; M128i; M256d; M256i ] -> r
+  | Inline_asm_arch.SSE when List.mem r.Reg.typ [ Float ] -> r
   | Inline_asm_arch.R   -> Reg.create Addr
   | Inline_asm_arch.SSE -> Reg.create Float
   | Inline_asm_arch.A   -> rax

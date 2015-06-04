@@ -67,10 +67,6 @@ let register_class r =
   | Float, VFPv2     -> 1
   | Float, VFPv3_D16 -> 1
   | Float, _         -> 2
-  | M128d, _
-  | M128i, _
-  | M256d, _
-  | M256i, _ -> fatal_error "Vector data types not supported on architecture ARM"
 
 let num_available_registers =
   [| 9; 16; 32 |]
@@ -137,10 +133,6 @@ let calling_conventions
           loc.(i) <- stack_slot (make_stack !ofs) Float;
           ofs := !ofs + size_float
         end
-    | M128d
-    | M128i
-    | M256d
-    | M256i -> fatal_error "Vector data types not supported on architecture ARM"
   done;
   (loc, Misc.align !ofs 8)  (* keep stack 8-aligned *)
 

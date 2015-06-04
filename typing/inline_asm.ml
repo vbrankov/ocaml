@@ -20,10 +20,6 @@ type arg_kind =
   | `Int
   | `Int32
   | `Int64
-  | `M128d
-  | `M256d
-  | `M128i
-  | `M256i
   | `Nativeint
   | `Unit ]
 
@@ -52,7 +48,6 @@ type arg_modifier =
   | R32
   | R64
   | XMM
-  | YMM
 
 type template_item =
     Emit_arg of int * arg_modifier
@@ -122,7 +117,6 @@ let parse_template ~nargs template =
             | 'w' -> `reg R16
             | 'k' -> `reg R32
             | 'q' -> `reg R64
-            | 't' -> `reg YMM
             | 'x' -> `reg XMM
             | _   -> assert false
             end |> function

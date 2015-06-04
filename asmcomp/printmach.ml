@@ -25,11 +25,7 @@ let reg ppf r =
       match r.typ with
         Addr -> "A"
       | Int -> "I"
-      | Float -> "F"
-      | M128d -> "M128d"
-      | M256d -> "M256d"
-      | M128i -> "M128i"
-      | M256i -> "M256i" );
+      | Float -> "F" );
   fprintf ppf "/%i" r.stamp;
   begin match r.loc with
   | Unknown -> ()
@@ -177,8 +173,7 @@ let operation op arg ppf res =
                       | R16 -> "w"
                       | R32 -> "k"
                       | R64 -> "q"
-                      | XMM -> "x"
-                      | YMM -> "y" )
+                      | XMM -> "x" )
               | Unit -> fprintf ppf "()"
               end
           | Record_frame -> fprintf ppf "%%f") a

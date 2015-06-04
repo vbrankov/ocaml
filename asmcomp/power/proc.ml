@@ -70,10 +70,6 @@ let register_class r =
     Int -> 0
   | Addr -> 0
   | Float -> 1
-  | M128d
-  | M128i
-  | M256d
-  | M256i -> fatal_error "Vector data types not supported on architecture Power"
 
 let num_available_registers = [| 23; 31 |]
 
@@ -129,10 +125,6 @@ let calling_conventions
           loc.(i) <- stack_slot (make_stack !ofs) Float;
           ofs := !ofs + size_float
         end
-    | M128d
-    | M128i
-    | M256d
-    | M256i -> fatal_error "Vector data types not supported on architecture Power"
   done;
   (loc, Misc.align !ofs 16)
   (* Keep stack 16-aligned. *)
@@ -188,10 +180,6 @@ let poweropen_external_conventions first_int last_int
           ofs := !ofs + size_float
         end;
         int := !int + (if ppc64 then 1 else 2)
-    | M128d
-    | M128i
-    | M256d
-    | M256i -> fatal_error "Vector data types not supported on architecture Power"
   done;
   (loc, Misc.align !ofs 16) (* Keep stack 16-aligned *)
 

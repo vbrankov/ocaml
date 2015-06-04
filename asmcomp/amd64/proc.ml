@@ -102,7 +102,7 @@ let register_class r =
   match r.typ with
     Int -> 0
   | Addr -> 0
-  | Float | M128d | M128i | M256d | M256i -> 1
+  | Float -> 1
 
 let num_available_registers = [| 13; 16 |]
 
@@ -188,7 +188,7 @@ let calling_conventions first_int last_int first_float last_float make_stack
           loc.(i) <- stack_slot (make_stack !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float | M128d | M256d | M128i | M256i ->
+    | Float ->
         if !float <= last_float then begin
           loc.(i) <- phys_reg !float;
           incr float
@@ -248,7 +248,7 @@ let win64_loc_external_arguments arg =
           loc.(i) <- stack_slot (Outgoing !ofs) ty;
           ofs := !ofs + size_int
         end
-    | Float | M128d | M256d | M128i | M256i ->
+    | Float ->
         if !reg < 4 then begin
           loc.(i) <- phys_reg win64_float_external_arguments.(!reg);
           incr reg

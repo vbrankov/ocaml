@@ -578,11 +578,6 @@ let rec emit_instr i dslot =
 	  | Word -> lg
           | Single -> "lfs"
           | Double | Double_u -> "lfd"
-          | M128d_a | M128d_u
-          | M128i_a | M128i_u
-          | M256d_a | M256d_u
-          | M256i_a | M256i_u ->
-              fatal_error "Vector data types not supported on architecture Power" in
         emit_load_store loadinstr addr i.arg 0 i.res.(0);
         if chunk = Byte_signed then
           `	extsb	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
@@ -595,11 +590,6 @@ let rec emit_instr i dslot =
 	  | Word -> stg
           | Single -> "stfs"
           | Double | Double_u -> "stfd"
-          | M128d_a | M128d_u
-          | M128i_a | M128i_u
-          | M256d_a | M256d_u
-          | M256i_a | M256i_u ->
-              fatal_error "Vector data types not supported on architecture Power" in
         emit_load_store storeinstr addr i.arg 1 i.arg.(0)
     | Lop(Ialloc n) ->
         if !call_gc_label = 0 then call_gc_label := new_label();

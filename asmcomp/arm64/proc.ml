@@ -61,10 +61,6 @@ let register_class r =
   match r.typ with
   | (Int | Addr)  -> 0
   | Float         -> 1
-  | M128d
-  | M128i
-  | M256d
-  | M256i -> fatal_error "Vector data types not supported on architecture ARM64"
 
 let num_available_registers =
   [| 23; 32 |] (* first 23 int regs allocatable; all float regs allocatable *)
@@ -131,10 +127,6 @@ let calling_conventions
           loc.(i) <- stack_slot (make_stack !ofs) Float;
           ofs := !ofs + size_float
         end
-    | M128d
-    | M128i
-    | M256d
-    | M256i -> fatal_error "Vector data types not supported on architecture ARM64"
   done;
   (loc, Misc.align !ofs 16)  (* keep stack 16-aligned *)
 
