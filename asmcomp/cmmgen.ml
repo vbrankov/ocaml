@@ -1653,26 +1653,8 @@ and transl_asm appl args =
     in
     match args with
       arg :: args ->
-        if asm_arg.output then
-          let unboxed = Ident.create "unboxed" in
-          let id = match arg with Uvar id -> id | _ -> Ident.create "deref" in
-          let assign, arg_expr =
-            if appl.ref_eliminated.(n) then
-              Cassign(id, box (Cvar unboxed)), Cvar id
-            else
-              return_unit(set_field (Cvar id) 0 (box (Cvar unboxed))),
-              get_field (Cvar id) 0
-          in
-          let assigns = assign :: assigns in
-          let transl_args = (Cvar unboxed) :: transl_args in
-          let expr = Clet(unboxed, unbox arg_expr,
-            make_expression transl_args assigns args (n + 1)) in
-          match arg with
-            Uvar _ -> expr
-          | _ -> Clet(id, transl arg, expr)
-        else
-          let transl_args = (transl_unbox arg) :: transl_args in
-          make_expression transl_args assigns args (n + 1)
+        let transl_args = (transl_unbox arg) :: transl_args in
+        make_expression transl_args assigns args (n + 1)
     | [] ->
         let asm = box (Cop(Casm appl, List.rev transl_args)) in
         if asm_arg.kind = `Unit || assigns = [] then

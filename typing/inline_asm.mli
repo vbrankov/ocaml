@@ -120,9 +120,8 @@ type inline_asm = {
 
 (** An application of inline assembly *)
 type application = {
-  asm            : inline_asm;
-  ref_eliminated : bool array;
-  loc            : Location.t }
+  asm : inline_asm;
+  loc : Location.t }
 
 val parse: arg_kind list -> string list -> inline_asm
 

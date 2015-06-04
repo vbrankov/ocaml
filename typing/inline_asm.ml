@@ -71,9 +71,8 @@ type inline_asm = {
   decl           : string array }
 
 type application = {
-  asm            : inline_asm;
-  ref_eliminated : bool array;
-  loc            : Location.t }
+  asm : inline_asm;
+  loc : Location.t }
 
 (** Parses the template given as string with arguments given as %i, for example
     "addpd %0 %1".  Double percentage is unescaped. *)
@@ -258,14 +257,18 @@ let parse kinds decl =
       | Emit_string _ | Emit_unique | Record_frame -> ()) a
   in
   check_operand_number template;
-  Array.iter (fun arg ->
+  Array.iteri (fun i arg ->
     if Array.length arg.alternatives != Array.length args.(0).alternatives then
       error "operand constraints for 'asm' differ in number of alternatives";
+    if arg.output && i < nargs - 1 then
+      (* There is a relatively small patch which allows multiple outputs but the feature
+         is scheduled for later to make the code review simpler *)
+      error "an input argument cannot act as output";
     Array.iter (fun alt ->
       match alt.copy_to_output with
       | None -> ()
       | Some i ->
-          if arg.output then error "matching constraint not valid in output parameter";
+        if arg.output then error "matching constraint not valid in output parameter";
         if i >= Array.length args then
           error "matching constraint references invalid operand number";
         if not args.(i).output then
