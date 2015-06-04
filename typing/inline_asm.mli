@@ -88,14 +88,14 @@ type template_item =
   (** A token in the assembly template which refers to the input or output
       arguments, for example "%0" and "%1" in "addq %0, %1" *)
   | Emit_dialect of template array
-  (* If the assembly specifies multiple dialects, for example GAS and MASM, a
-     separate branch for each dialect *)
+  (** If the assembly specifies multiple dialects, for example GAS and MASM, a
+      separate branch for each dialect *)
   | Emit_string of string
-  (* Fixed text *)
+  (** Fixed text *)
   | Emit_unique
-  (* A number unique for each instance of the generated assembly code *)
+  (** A number unique for each instance of the generated assembly code *)
   | Record_frame
-  (* Records the stack frame *)
+  (** Records the stack frame *)
 and template = template_item array
 
 (** A full specification of the inline assembly primitive *)
@@ -118,8 +118,13 @@ type application = {
   asm : inline_asm;
   loc : Location.t }
 
+(** Parses the inline assembly primitive specification given as the types of the function
+    arguments and strings at the end of the [external] declaration. *)
 val parse: arg_kind list -> string list -> inline_asm
 
+(** Returns the assembly template of the inline assembly *)
 val name : inline_asm -> string
+(** Returns the list of strings at the end of the [external] declaration *)
 val description : inline_asm -> string list
+(** Returns the C function which should be used in the byte code interpreter *)
 val bytecode_call : inline_asm -> string

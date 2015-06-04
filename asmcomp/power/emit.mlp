@@ -577,7 +577,7 @@ let rec emit_instr i dslot =
           | Thirtytwo_signed -> if ppc64 then "lwa" else "lwz"
 	  | Word -> lg
           | Single -> "lfs"
-          | Double | Double_u -> "lfd"
+          | Double | Double_u -> "lfd" in
         emit_load_store loadinstr addr i.arg 0 i.res.(0);
         if chunk = Byte_signed then
           `	extsb	{emit_reg i.res.(0)}, {emit_reg i.res.(0)}\n`
@@ -589,7 +589,7 @@ let rec emit_instr i dslot =
 	  | Thirtytwo_unsigned | Thirtytwo_signed -> "stw"
 	  | Word -> stg
           | Single -> "stfs"
-          | Double | Double_u -> "stfd"
+          | Double | Double_u -> "stfd" in
         emit_load_store storeinstr addr i.arg 1 i.arg.(0)
     | Lop(Ialloc n) ->
         if !call_gc_label = 0 then call_gc_label := new_label();

@@ -1352,7 +1352,7 @@ let transl_exception env sext =
   let newenv = Env.add_extension ~check:true ext.ext_id ext.ext_type env in
     ext, newenv
 
-(** Extracts types of function argument infos to be used by inline asm. *)
+(** Extracts the types of the function arguments used by the inline assembly *)
 let inline_asm_args env ty =
   let open Types in
   let rec get_atomic_type path =

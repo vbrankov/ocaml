@@ -29,7 +29,7 @@ let is_offset chunk n =
     | Thirtytwo_unsigned | Thirtytwo_signed | Single ->
         n land 3 = 0 && n lsr 2 < 0x1000
     | Word | Double | Double_u ->
-        n land 7 = 0 && n lsr 3 < 0x1000
+        n land 7 = 0 && n lsr 3 < 0x1000)
 
 (* An automaton to recognize ( 0+1+0* | 1+0+1* )
 

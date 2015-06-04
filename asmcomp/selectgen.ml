@@ -254,29 +254,38 @@ method mark_instr = function
     self#mark_call
   | _ -> ()
 
-(* If the given inline assembly alternative is possible returns its cost *)
+(* If the given inline assembly alternative is possible returns its cost.  Also
+   determine the number of machine registers that are necessary for the
+   arguments.  For example, immediate operands need no machine registers. *)
 method asm_alternative_cost asm args alt_index =
   let open Inline_asm in
   try
     let cost    = ref 0 in
     let num_arg = ref 0 in
     let num_res = ref 0 in
+    (* The cost of the alternative is the sum of the cost of each argument *)
     let asm_mach_args = Array.mapi (fun j asm_arg ->
       let alt = asm_arg.alternatives.(alt_index) in
       let source, num_reg, arg_cost =
         if j > Array.length args then assert false
         else if j = Array.length args then begin
+          (* Unit return requires no registers and has no cost *)
           if asm_arg.kind = `Unit then Unit, 0, 0
           else if alt.register then Reg, 1, alt.disparage
           else Stack, 1, alt.reload_disparage
         end else if alt.copy_to_output <> None then Reg, 1, 0
         else
           match alt.memory, args.(j) with
+          (* Immediate arguments require no registers *)
             _, Cconst_int n when alt.immediate ->
               Imm (Int64.of_int n), 0, alt.disparage
           | _, Cconst_natint n when alt.immediate ->
               Imm (Int64.of_nativeint n), 0, alt.disparage
+          (* Unit arguments require no registers and have no cost *)
           | _, _ when asm_arg.kind = `Unit  -> Unit, 0, 0
+          (* An argument can be pulled directly from memory instead of having
+             to be in a register.  Make sure that the allowed addressing mode
+             matches. *)
           |  `m8,
             Cop(Cload (Byte_unsigned | Byte_signed as chunk), [loc])
           | (`m8 | `m16),
@@ -290,8 +299,13 @@ method asm_alternative_cost asm args alt_index =
               Addr (chunk, addr, arg1),
                 Arch.num_args_addressing addr,
                 alt.disparage
-          | _, Cop(Cload _, _) when alt.register -> Reg, 1, alt.reload_disparage
+          (* An argument pulled from memory to a register *)
+          | _, Cop(Cload _, _) when alt.register ->
+              Reg, 1, alt.reload_disparage
+          (* An argument already in a register *)
           | _, _ when alt.register               -> Reg, 1, alt.disparage
+          (* A memory argument which is in a register has to be first stored in
+             the memory *)
           | _, _ when alt.memory <> `no          ->
               Stack, 1, alt.reload_disparage
           | _, _ -> raise Asm_alternative_not_possible
@@ -306,7 +320,9 @@ method asm_alternative_cost asm args alt_index =
 
 (* Finds the best inline asm alternative in terms of cost *)
 method asm_best_alternative asm args =
-  let rec try_all_commutations asm args i j best =
+  (* If multiple alternatives are possible for multiple arguments, estimate the
+     cost of each combination *)
+  let rec try_all_combinations asm args i j best =
     if j >= Array.length args - 1 then
       match self#asm_alternative_cost asm args i with
         None -> best
@@ -319,15 +335,15 @@ method asm_best_alternative asm args =
     else
       let asm_arg = asm.Inline_asm.args.(j).Inline_asm.alternatives.(i) in
       if asm_arg.Inline_asm.commutative then begin
-        let best = try_all_commutations asm args i (j + 1) best in
+        let best = try_all_combinations asm args i (j + 1) best in
         let arg_j = args.(j) in
         args.(j) <- args.(j + 1);
         args.(j + 1) <- arg_j;
-        let best = try_all_commutations asm args i (j + 1) best in
+        let best = try_all_combinations asm args i (j + 1) best in
         args.(j + 1) <- args.(j);
         args.(j) <- arg_j;
         best
-      end else try_all_commutations asm args i (j + 1) best
+      end else try_all_combinations asm args i (j + 1) best
   in
 
   let args = Array.of_list args in
@@ -337,7 +353,7 @@ method asm_best_alternative asm args =
       match best with
         None -> None
       | Some (iargs, args, _) -> Some (iargs, Array.to_list args)
-    else loop i (try_all_commutations asm args i 0 best)
+    else loop i (try_all_combinations asm args i 0 best)
   in
   loop (Array.length asm.Inline_asm.args.(0).Inline_asm.alternatives) None
 
@@ -665,28 +681,47 @@ method emit_expr env exp =
               self#emit_stores env new_args rd;
               Some rd
           | Iasm (asm, iargs) ->
+              (* Handle:
+
+                 - CMM arguments which require no machine registers
+                 - Arguments which much reside in the memory
+                 - Arguments which are forced into exact registers by
+                   [Inline_asm.mach_register]
+                 - Input arguments which are shared with the output registers
+                 - Input and output arguments divided into two groups.  This
+                   version of the code doesn't support multiple output
+                   arguments but such feature is planned. *)
               let r1 = self#emit_tuple env new_args in
               let rd = self#regs_for ty in
               let rs = Array.append r1 rd in
               let rs_new = Array.copy rs in
+              (* Since some CMM arguments require no mach arguments, determine
+                 the position of the register argument for each CMM argument *)
               let rs_pos = Array.make (Array.length iargs) 0 in
               for i = 1 to Array.length iargs - 1 do
                 rs_pos.(i) <- rs_pos.(i - 1) + iargs.(i - 1).num_reg
               done;
+              (* This pass handles arguments which must be in the memory and
+                 arguments which use fixed registers *)
               Array.iteri (fun i iarg ->
                 let pos = rs_pos.(i) in
                 for i = pos to pos + iarg.num_reg - 1 do
                   match iarg.source with
                     Addr _ | Imm _ | Unit -> ()
                   | Stack -> rs_new.(i).Reg.spill <- true
-                  | Reg   -> rs_new.(i) <- self#asm_pseudoreg iarg.Mach.alt rs_new.(i)
+                  | Reg   ->
+                      rs_new.(i) <- self#asm_pseudoreg iarg.Mach.alt rs_new.(i)
                 done) iargs;
-              (* This has to be done in two passes! *)
+              (* This has to be done in two passes!  Handle input arguments
+                 which are shared with output arguments. *)
               Array.iteri (fun i iarg ->
                 match iarg.alt.Inline_asm.copy_to_output with
                   None -> ()
                 | Some n -> rs_new.(rs_pos.(i)) <- rs_new.(rs_pos.(n))) iargs;
 
+              (* Split mach arguments into input and output and if necessary
+                 move data to the mach registers which the instruction accepts
+                 *)
               let rsrc     = ref [] in
               let rsrc_new = ref [] in
               let rdst     = ref [] in
