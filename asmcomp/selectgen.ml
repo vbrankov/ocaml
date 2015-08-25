@@ -29,16 +29,17 @@ let oper_result_type = function
   | Cextcall(s, ty, alloc, _) -> ty
   | Cload c ->
       begin match c with
-        Word -> typ_addr
+      | Word_val -> typ_val
       | Single | Double | Double_u -> typ_float
       | _ -> typ_int
       end
-  | Calloc -> typ_addr
+  | Calloc -> typ_val
   | Cstore c -> typ_void
   | Caddi | Csubi | Cmuli | Cmulhi | Cdivi | Cmodi |
     Cand | Cor | Cxor | Clsl | Clsr | Casr |
     Ccmpi _ | Ccmpa _ | Ccmpf _ -> typ_int
-  | Cadda | Csuba -> typ_addr
+  | Caddv -> typ_val
+  | Cadda -> typ_addr
   | Cnegf | Cabsf | Caddf | Csubf | Cmulf | Cdivf -> typ_float
   | Cfloatofint -> typ_float
   | Cintoffloat -> typ_int
@@ -221,7 +222,7 @@ method virtual select_addressing :
 (* Default instruction selection for stores (of words) *)
 
 method select_store is_assign addr arg =
-  (Istore(Word, addr, is_assign), arg)
+  (Istore(Word_val, addr, is_assign), arg)
 
 (* call marking methods, documented in selectgen.mli *)
 
@@ -293,7 +294,7 @@ method asm_alternative_cost asm args alt_index =
           | (`m8 | `m16 | `m32),
             Cop(Cload (Thirtytwo_unsigned | Thirtytwo_signed as chunk), [loc])
           | (`m8 | `m16 | `m32 | `m64),
-            Cop(Cload (Word | Single | Double | Double_u as chunk), [loc])
+            Cop(Cload (Word_int | Word_val | Single | Double | Double_u as chunk), [loc])
             when asm_arg.input && alt.copy_to_output = None ->
               let addr, arg1 = self#select_addressing chunk loc in
               Addr (chunk, addr, arg1),
@@ -369,7 +370,7 @@ method select_operation op args =
       (Iload(chunk, addr), [eloc])
   | (Cstore chunk, [arg1; arg2]) ->
       let (addr, eloc) = self#select_addressing chunk arg1 in
-      if chunk = Word then begin
+      if chunk = Word_int || chunk = Word_val then begin
         let (op, newarg2) = self#select_store true addr arg2 in
         (op, [newarg2; eloc])
       end else begin
@@ -390,8 +391,8 @@ method select_operation op args =
   | (Clsr, _) -> self#select_shift Ilsr args
   | (Casr, _) -> self#select_shift Iasr args
   | (Ccmpi comp, _) -> self#select_arith_comp (Isigned comp) args
+  | (Caddv, _) -> self#select_arith_comm Iadd args
   | (Cadda, _) -> self#select_arith_comm Iadd args
-  | (Csuba, _) -> self#select_arith Isub args
   | (Ccmpa comp, _) -> self#select_arith_comp (Iunsigned comp) args
   | (Cnegf, _) -> (Inegf, args)
   | (Cabsf, _) -> (Iabsf, args)
@@ -535,14 +536,14 @@ method asm_pseudoreg _ r = r
 
 (* Adjust the types of destination pseudoregs for a [Cassign] assignment.
    The type inferred at [let] binding might be [Int] while we assign
-   something of type [Addr] (PR#6501). *)
+   something of type [Val] (PR#6501). *)
 
 method adjust_type src dst =
   let ts = src.typ and td = dst.typ in
   if ts <> td then
     match ts, td with
-    | Addr, Int -> dst.typ <- Addr
-    | Int, Addr -> ()
+    | Val, Int -> dst.typ <- Val
+    | Int, Val -> ()
     | _, _ -> fatal_error("Selection.adjust_type: bad assignment to "
                                                            ^ Reg.name dst)
 
@@ -590,13 +591,13 @@ method emit_expr env exp =
       let r = self#regs_for typ_float in
       Some(self#insert_op (Iconst_float n) [||] r)
   | Cconst_symbol n ->
-      let r = self#regs_for typ_addr in
+      let r = self#regs_for typ_val in
       Some(self#insert_op (Iconst_symbol n) [||] r)
   | Cconst_pointer n ->
-      let r = self#regs_for typ_addr in
+      let r = self#regs_for typ_val in  (* integer as Caml value *)
       Some(self#insert_op (Iconst_int(Nativeint.of_int n)) [||] r)
   | Cconst_natpointer n ->
-      let r = self#regs_for typ_addr in
+      let r = self#regs_for typ_val in  (* integer as Caml value *)
       Some(self#insert_op (Iconst_int n) [||] r)
   | Cvar v ->
       begin try
@@ -675,7 +676,7 @@ method emit_expr env exp =
               self#insert_move_results loc_res rd stack_ofs;
               Some rd
           | Ialloc _ ->
-              let rd = self#regs_for typ_addr in
+              let rd = self#regs_for typ_val in
               let size = size_expr env (Ctuple new_args) in
               self#insert (Iop(Ialloc size)) [||] rd;
               self#emit_stores env new_args rd;
@@ -792,7 +793,7 @@ method emit_expr env exp =
       let rs =
         List.map
           (fun id ->
-            let r = self#regs_for typ_addr in name_regs id r; r)
+            let r = self#regs_for typ_val in name_regs id r; r)
           ids in
       catch_regs := (nfail, Array.concat rs) :: !catch_regs ;
       let (r1, s1) = self#emit_sequence env e1 in
@@ -821,7 +822,7 @@ method emit_expr env exp =
       end
   | Ctrywith(e1, v, e2) ->
       let (r1, s1) = self#emit_sequence env e1 in
-      let rv = self#regs_for typ_addr in
+      let rv = self#regs_for typ_val in
       let (r2, s2) = self#emit_sequence (Tbl.add v rv env) e2 in
       let r = join r1 s1 r2 s2 in
       self#insert
@@ -914,11 +915,7 @@ method emit_stores env data regs_addr =
             Istore(_, _, _) ->
               for i = 0 to Array.length regs - 1 do
                 let r = regs.(i) in
-                let kind =
-                  match r.typ with
-                  | Float -> Double_u
-                  | _ -> Word
-                in
+                let kind = if r.typ = Float then Double_u else Word_val in
                 self#insert (Iop(Istore(kind, !a, false)))
                             (Array.append [|r|] regs_addr) [||];
                 a := Arch.offset_addressing !a (size_component r.typ)
@@ -1014,7 +1011,7 @@ method emit_tail env exp =
        let rs =
         List.map
           (fun id ->
-            let r = self#regs_for typ_addr in
+            let r = self#regs_for typ_val in
             name_regs id r  ;
             r)
           ids in
@@ -1029,7 +1026,7 @@ method emit_tail env exp =
       self#insert (Icatch(nfail, s1, s2)) [||] [||]
   | Ctrywith(e1, v, e2) ->
       let (opt_r1, s1) = self#emit_sequence env e1 in
-      let rv = self#regs_for typ_addr in
+      let rv = self#regs_for typ_val in
       let s2 = self#emit_tail_sequence (Tbl.add v rv env) e2 in
       self#insert
         (Itrywith(s1#extract,

@@ -124,7 +124,9 @@ val parse: arg_kind list -> string list -> inline_asm
 
 (** Returns the assembly template of the inline assembly *)
 val name : inline_asm -> string
+
 (** Returns the list of strings at the end of the [external] declaration *)
 val description : inline_asm -> string list
+
 (** Returns the C function which should be used in the byte code interpreter *)
 val bytecode_call : inline_asm -> string
